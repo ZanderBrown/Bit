@@ -103,7 +103,7 @@ class BitWin(Gtk.ApplicationWindow):
 
         self.notebook = Gtk.Notebook()
 
-        self.create_sourceview("/home/pi/projects/Untitled Folder/bit.py")
+        self.create_sourceview()
         self.box.pack_start(self.notebook, True, True, 0)
         
         self.add(self.box)
@@ -112,7 +112,7 @@ class BitWin(Gtk.ApplicationWindow):
         self.set_icon_name("applications-development")
         self.show_all()
 
-    def create_sourceview(self, file):
+    def create_sourceview(self, file = "/home/pi/projects/Untitled Folder/template.py"):
 
         filename = file.split('/')
         filename = filename[len(filename)-1]
@@ -125,17 +125,15 @@ class BitWin(Gtk.ApplicationWindow):
         if language:
             buffer.set_highlight_syntax(True)
             buffer.set_language(language)
+            print(language)
         else:
             print('No language found for file "%s"' % file)
             buffer.set_highlight_syntax(False)
 
-        #txt = open(file).read()
-        #buffer.set_text(txt)
-        #buffer.place_cursor(buffer.get_start_iter())
-
         source_file = GtkSource.File()
         source_file.set_location(Gio.File.new_for_path(file))
-        source_file_loader = GtkSource.FileLoader(buffer, source_file);
+        source_file_loader = GtkSource.FileLoader().new(buffer, source_file);
+        source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
 
         # style list /usr/share/gtksourceview-3.0/
         sourceview = GtkSource.View.new_with_buffer(buffer)
@@ -171,7 +169,7 @@ class BitWin(Gtk.ApplicationWindow):
         self.notebook.remove_page(pagenum)
 
     def on_new_clicked(self, widget, data):
-        self.create_sourceview("/home/pi/Documents/power.py")
+        self.create_sourceview()
         self.show_all()
 
     def on_save_clicked(self, widget, data):
