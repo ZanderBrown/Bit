@@ -1,0 +1,8 @@
+pytest
+pep8
+pyflakes
+coverage
+sphinx
+pytest-cov
+setuptools==19.2
+pygobject

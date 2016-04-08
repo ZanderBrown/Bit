@@ -1,0 +1,46 @@
+environment:
+  matrix:
+    - PYTHON: "C:\\Python34"
+      PYTHON_VERSION: "3.4.3"
+      PYTHON_ARCH: "32"
+
+platform: x86
+
+configuration: Release
+
+init:
+  - cmd: ECHO Processor architecture - %PROCESSOR_ARCHITECTURE%
+  - cmd: wmic OS get OSArchitecture
+
+  # As AppVeyor has multiple python install, verify which one uses by default
+  - cmd: ECHO %PYTHON% %PYTHON_VERSION% %PYTHON_ARCH%
+  - cmd: python --version
+  - cmd: python -c "import struct; print(struct.calcsize('P') * 8)"
+
+  # Set the relevant python and pip location to the path
+  - cmd: set PATH=%PYTHON%;%PYTHON%\scripts;%PATH%
+  - cmd: ECHO Path - %PATH%
+
+  # Verify the new default python
+  - cmd: python --version
+  - cmd: python -c "import struct; print(struct.calcsize('P') * 8)"
+  - cmd: pip --version
+
+  # Check out installed python packages
+  - cmd: pip freeze
+
+install:
+  # Install python dependencies
+  - cmd: pip install pyinstaller
+  - cmd: pip install -r requirements.txt
+
+  # Check installed packages again
+  - cmd: pip freeze
+
+  # Build mu using PyInstaller and rename executable with timestamp
+  - cmd: pyinstaller package\pyinstaller.spec
+  - cmd: dir dist
+  - ps: Rename-Item .\dist\bit.exe bit-$(get-date -f yyyy-MM-dd_HH_mm_ss).exe
+
+# Not a project with an msbuild file, build done at install.
+build: None

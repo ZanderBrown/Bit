@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Bit
+GenericName=Micro::Bit Python
+Comment=Python Editor for Micro::Bit
+Icon=applications-development
+TryExec=bit
+Exec=bit
+Terminal=false
+Categories=Application;Gtk;
+Keywords=Python;Editor;microbit;micro:bit;
+

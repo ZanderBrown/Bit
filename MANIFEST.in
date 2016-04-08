@@ -1,0 +1,7 @@
+include bit/*
+include README.rst
+include LICENSE
+include conf/*
+include bit/resources/css/*
+include bit/resources/fonts/*
+include run.py

@@ -1,0 +1,11 @@
+Source: bit
+Maintainer: Alexander Brown
+Section: python
+Priority: optional
+Build-Depends: python3-setuptools, python3, debhelper (>= 9), python-gobject
+Standards-Version: 3.9.1
+
+Package: bit
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends}, python3-gi, libgtk-3-0 (>= 3.10)
+Description: Python Editor for Micro::Bit
