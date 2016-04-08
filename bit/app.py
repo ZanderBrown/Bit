@@ -37,6 +37,7 @@ class TabLabel(Gtk.Box):
              
         # label
         label = Gtk.Label(label_text)
+        self.text = label_text
         self.pack_start(label, True, True, 0)
        
         # close button
@@ -63,6 +64,9 @@ class TabLabel(Gtk.Box):
    
     def button_clicked(self, button, data=None):
         self.emit("close-clicked")
+
+    def get_text(self):
+        return self.text
 
 class BitWin(Gtk.ApplicationWindow):
 
@@ -102,7 +106,12 @@ class BitWin(Gtk.ApplicationWindow):
         self.box.add(toolbar)
 
         self.notebook = Gtk.Notebook()
+        self.notebook.set_show_border(False)
+        self.notebook.set_scrollable (True)
+        Gtk.Notebook.popup_enable (self.notebook)
+        self.notebook.connect("switch-page", self.on_page_changed, None)
 
+        self.files = []
         self.create_sourceview()
         self.box.pack_start(self.notebook, True, True, 0)
         
@@ -111,6 +120,10 @@ class BitWin(Gtk.ApplicationWindow):
         self.set_titlebar(self.header)
         self.set_icon_name("applications-development")
         self.show_all()
+
+    def on_page_changed(self, happy, page, page_num, data):
+        self.header.set_title(self.notebook.get_tab_label(page).get_text())
+        print(page.bit_buffer.get_text(page.bit_buffer.get_start_iter(), page.bit_buffer.get_end_iter(), True))
 
     def create_sourceview(self, file = "/home/pi/projects/Untitled Folder/template.py"):
 
@@ -132,7 +145,7 @@ class BitWin(Gtk.ApplicationWindow):
 
         source_file = GtkSource.File()
         source_file.set_location(Gio.File.new_for_path(file))
-        source_file_loader = GtkSource.FileLoader().new(buffer, source_file);
+        source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
         source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
 
         # style list /usr/share/gtksourceview-3.0/
@@ -151,6 +164,8 @@ class BitWin(Gtk.ApplicationWindow):
         
         self.notebook.append_page(scrolledwindow, tab_label)
         self.notebook.set_tab_reorderable(scrolledwindow, True)
+        scrolledwindow.bit_file = source_file
+        scrolledwindow.bit_buffer = buffer
         scrolledwindow.show_all()
         tab_label.show_all()
         self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
@@ -178,7 +193,7 @@ class BitWin(Gtk.ApplicationWindow):
         
     def on_open_clicked(self, widget, data):
         print("Open")
-        filechooserdialog = Gtk.FileChooserDialog("Please choose a file", self, Gtk.FileChooserAction.OPEN, (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+        filechooserdialog = Gtk.FileChooserDialog("Open", self, Gtk.FileChooserAction.OPEN, (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
 
         filter_py = Gtk.FileFilter()
         filter_py.set_name("Python files")
@@ -231,6 +246,7 @@ class BitApp(Gtk.Application):
             # Windows are associated with the application
             # when the last one is closed the application shuts down
             self.window = BitWin(application=self, title="Bit")
+            self.window.connect("delete-event", Gtk.main_quit)
 
         self.window.present()
 
