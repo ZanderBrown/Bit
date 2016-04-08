@@ -34,7 +34,12 @@ class TabLabel(Gtk.Box):
         Gtk.Box.__init__(self)
         self.set_orientation(Gtk.Orientation.HORIZONTAL)
         self.set_spacing(5) # spacing: [icon|5px|label|5px|close]  
-             
+
+        # icon
+        self.spinner = Gtk.Spinner()
+        self.pack_start(self.spinner, False, False, 0)
+        self.spinner.set_visible(False)
+        
         # label
         label = Gtk.Label(label_text)
         self.text = label_text
@@ -61,12 +66,21 @@ class TabLabel(Gtk.Box):
         self.pack_start(button, False, False, 0)
        
         self.show_all()
+        self.spinner.set_visible(False)
    
     def button_clicked(self, button, data=None):
         self.emit("close-clicked")
 
     def get_text(self):
         return self.text
+
+    def start_working(self):
+        self.spinner.start()
+        self.spinner.set_visible(True)
+
+    def stop_working(self):
+        self.spinner.stop()
+        self.spinner.set_visible(False)
 
 class BitWin(Gtk.ApplicationWindow):
 
@@ -188,8 +202,13 @@ class BitWin(Gtk.ApplicationWindow):
         self.show_all()
 
     def on_save_clicked(self, widget, data):
+        source_file_saver = GtkSource.FileSaver.new(self.notebook.get_nth_page(self.notebook.get_current_page()).bit_buffer, self.notebook.get_nth_page(self.notebook.get_current_page()).bit_file)
+        self.notebook.get_tab_label(self.notebook.get_nth_page(self.notebook.get_current_page())).start_working()
+        source_file_saver.save_async(GLib.PRIORITY_DEFAULT, None, None, None, self.done_io, self.notebook.get_nth_page(self.notebook.get_current_page()))
         print("Save")
         
+    def done_io(self, task, result, data):
+        self.notebook.get_tab_label(data).stop_working()
         
     def on_open_clicked(self, widget, data):
         print("Open")
