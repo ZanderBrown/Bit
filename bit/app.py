@@ -139,7 +139,7 @@ class BitWin(Gtk.ApplicationWindow):
         self.header.set_title(self.notebook.get_tab_label(page).get_text())
         print(page.bit_buffer.get_text(page.bit_buffer.get_start_iter(), page.bit_buffer.get_end_iter(), True))
 
-    def create_sourceview(self, file = "/home/pi/projects/Untitled Folder/template.py"):
+    def create_sourceview(self, file = "/home/pi/projects/Bit/template.py"):
 
         filename = file.split('/')
         filename = filename[len(filename)-1]
