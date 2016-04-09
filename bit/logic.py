@@ -40,13 +40,13 @@ HOME_DIRECTORY = os.path.expanduser('~')
 #: The default directory for Python scripts.
 PYTHON_DIRECTORY = os.path.join(HOME_DIRECTORY, 'python')
 #: The default directory for application data.
-DATA_DIR = appdirs.user_data_dir('mu', 'python')
+DATA_DIR = appdirs.user_data_dir('Bit', 'python')
 #: The default directory for application logs.
-LOG_DIR = appdirs.user_log_dir('mu', 'python')
+LOG_DIR = appdirs.user_log_dir('Bit', 'python')
 #: The path to the JSON file containing application settings.
 SETTINGS_FILE = os.path.join(DATA_DIR, 'settings.json')
 #: The path to the log file for the application.
-LOG_FILE = os.path.join(LOG_DIR, 'mu.log')
+LOG_FILE = os.path.join(LOG_DIR, 'Bit.log')
 
 
 logger = logging.getLogger(__name__)

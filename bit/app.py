@@ -1,10 +1,27 @@
 #!/usr/bin/python3
 
-import sys
-import gi
+import sys, gi, logging, os
 gi.require_version('Gtk', '3.0')
 from gi.repository import GLib, Gio, Gtk, GObject
 from gi.repository import GtkSource
+
+#from mu.logic import Editor, LOG_FILE, LOG_DIR
+from bit.logic import *
+
+logger = logging.getLogger(__name__)
+
+def setup_logging():
+    """
+    Configure logging.
+    """
+    if not os.path.exists(LOG_DIR):
+        os.makedirs(LOG_DIR)
+    log_format = '%(name)s(%(funcName)s) %(levelname)s: %(message)s'
+    logging.basicConfig(filename=LOG_FILE, filemode='w', format=log_format,
+                        level=logging.DEBUG)
+    print('Logging to {}'.format(LOG_FILE))
+
+
 
 # App Menu
 MENU_XML="""
@@ -31,6 +48,7 @@ class TabLabel(Gtk.Box):
         "close-clicked": (GObject.SIGNAL_RUN_FIRST, GObject.TYPE_NONE, ()),
     }
     def __init__(self, label_text):
+        logger.info("Make TabLabel")
         Gtk.Box.__init__(self)
         self.set_orientation(Gtk.Orientation.HORIZONTAL)
         self.set_spacing(5) # spacing: [icon|5px|label|5px|close]  
@@ -38,7 +56,6 @@ class TabLabel(Gtk.Box):
         # icon
         self.spinner = Gtk.Spinner()
         self.pack_start(self.spinner, False, False, 0)
-        self.spinner.set_visible(False)
         
         # label
         label = Gtk.Label(label_text)
@@ -113,11 +130,11 @@ class BitWin(Gtk.ApplicationWindow):
         #toolbutton.set_is_important(True)
         #toolbutton.connect("clicked", self.on_new_clicked, self)
 
-        toolbar = Gtk.Toolbar()
-        toolbar.get_style_context().add_class(Gtk.STYLE_CLASS_PRIMARY_TOOLBAR)
+        #toolbar = Gtk.Toolbar()
+        #toolbar.get_style_context().add_class(Gtk.STYLE_CLASS_PRIMARY_TOOLBAR)
         #toolbar.insert(toolbutton, 0)
 
-        self.box.add(toolbar)
+        #self.box.add(toolbar)
 
         self.notebook = Gtk.Notebook()
         self.notebook.set_show_border(False)
@@ -135,12 +152,15 @@ class BitWin(Gtk.ApplicationWindow):
         self.set_icon_name("applications-development")
         self.show_all()
 
+        mbtext = find_microbit()
+        print(mbtext)
+
     def on_page_changed(self, happy, page, page_num, data):
         self.header.set_title(self.notebook.get_tab_label(page).get_text())
-        print(page.bit_buffer.get_text(page.bit_buffer.get_start_iter(), page.bit_buffer.get_end_iter(), True))
+        logger.debug("Switched to tab with contents: " + page.bit_buffer.get_text(page.bit_buffer.get_start_iter(), page.bit_buffer.get_end_iter(), True))
 
     def create_sourceview(self, file = "/home/pi/projects/Bit/template.py"):
-
+        logger.debug("Make Tab")
         filename = file.split('/')
         filename = filename[len(filename)-1]
 
@@ -152,9 +172,8 @@ class BitWin(Gtk.ApplicationWindow):
         if language:
             buffer.set_highlight_syntax(True)
             buffer.set_language(language)
-            print(language)
         else:
-            print('No language found for file "%s"' % file)
+            logger.warning('No language found for file "%s"' % file)
             buffer.set_highlight_syntax(False)
 
         source_file = GtkSource.File()
@@ -181,37 +200,31 @@ class BitWin(Gtk.ApplicationWindow):
         scrolledwindow.bit_file = source_file
         scrolledwindow.bit_buffer = buffer
         scrolledwindow.show_all()
-        tab_label.show_all()
         self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
 
-    def on_maximize_toggle(self, action, value):
-        action.set_state(value)
-        if value.get_boolean():
-            self.maximize()
-        else:
-            self.unmaximize()
-
     def on_close_clicked(self, widget2, sender, widget):
-        #get the page number of the tab we wanted to close
+        logger.debug("Close Tab Requested")
         pagenum = self.notebook.page_num(widget)
-        #and close it
+        # Should check if saved
         self.notebook.remove_page(pagenum)
 
     def on_new_clicked(self, widget, data):
+        logger.debug("New Tab Requested")
         self.create_sourceview()
         self.show_all()
 
     def on_save_clicked(self, widget, data):
+        logger.debug("Save Requested")
         source_file_saver = GtkSource.FileSaver.new(self.notebook.get_nth_page(self.notebook.get_current_page()).bit_buffer, self.notebook.get_nth_page(self.notebook.get_current_page()).bit_file)
         self.notebook.get_tab_label(self.notebook.get_nth_page(self.notebook.get_current_page())).start_working()
         source_file_saver.save_async(GLib.PRIORITY_DEFAULT, None, None, None, self.done_io, self.notebook.get_nth_page(self.notebook.get_current_page()))
-        print("Save")
         
     def done_io(self, task, result, data):
+        logger.debug("File IO Complete")
         self.notebook.get_tab_label(data).stop_working()
         
     def on_open_clicked(self, widget, data):
-        print("Open")
+        logger.debug("Open Requested")
         filechooserdialog = Gtk.FileChooserDialog("Open", self, Gtk.FileChooserAction.OPEN, (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
 
         filter_py = Gtk.FileFilter()
@@ -231,7 +244,7 @@ class BitWin(Gtk.ApplicationWindow):
         filechooserdialog.destroy()
         
     def on_flash_clicked(self, widget, data):
-        print("Flash")
+        logger.debug("Flash Requested")
         
 
 class BitApp(Gtk.Application):
@@ -296,6 +309,7 @@ class BitApp(Gtk.Application):
 
 
 def run():
+    setup_logging()
     app = BitApp()
     app.run(sys.argv)
 
