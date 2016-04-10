@@ -181,7 +181,6 @@ class BitWin(Gtk.ApplicationWindow):
         source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
         source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
 
-        # style list /usr/share/gtksourceview-3.0/
         sourceview = GtkSource.View.new_with_buffer(buffer)
         sourceview.set_auto_indent(True)
         sourceview.set_indent_on_tab(True)
@@ -217,6 +216,7 @@ class BitWin(Gtk.ApplicationWindow):
         logger.debug("Save Requested")
         source_file_saver = GtkSource.FileSaver.new(self.notebook.get_nth_page(self.notebook.get_current_page()).bit_buffer, self.notebook.get_nth_page(self.notebook.get_current_page()).bit_file)
         self.notebook.get_tab_label(self.notebook.get_nth_page(self.notebook.get_current_page())).start_working()
+        self.notebook.get_nth_page(self.notebook.get_current_page()).bit_buffer.set_modified(False)
         source_file_saver.save_async(GLib.PRIORITY_DEFAULT, None, None, None, self.done_io, self.notebook.get_nth_page(self.notebook.get_current_page()))
         
     def done_io(self, task, result, data):
@@ -245,7 +245,20 @@ class BitWin(Gtk.ApplicationWindow):
         
     def on_flash_clicked(self, widget, data):
         logger.debug("Flash Requested")
-        
+
+    def on_close_widow(self):
+        logger.debug("Window closing")
+        print(self.notebook.get_n_pages())
+        for x in range(0, self.notebook.get_n_pages()):
+            if (self.notebook.get_nth_page(x).bit_buffer.get_modified()):
+                dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.QUESTION, Gtk.ButtonsType.YES_NO, "Unsaved Changes")
+                dialog.format_secondary_text(self.notebook.get_tab_label(self.notebook.get_nth_page(x)).text + " has unsaved changs. Save them now?")
+                response = dialog.run()
+                if response == Gtk.ResponseType.YES:
+                    print("QUESTION dialog closed by clicking YES button")
+                elif response == Gtk.ResponseType.NO:
+                    print("QUESTION dialog closed by clicking NO button")
+                dialog.destroy()
 
 class BitApp(Gtk.Application):
 
@@ -278,7 +291,7 @@ class BitApp(Gtk.Application):
             # Windows are associated with the application
             # when the last one is closed the application shuts down
             self.window = BitWin(application=self, title="Bit")
-            self.window.connect("delete-event", Gtk.main_quit)
+            self.window.connect("delete-event", self.on_quit)
 
         self.window.present()
 
@@ -304,6 +317,7 @@ class BitApp(Gtk.Application):
         aboutdialog.destroy()
 
     def on_quit(self, action, param):
+        self.window.on_close_widow()
         self.quit()
 
 
