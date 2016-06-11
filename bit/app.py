@@ -122,6 +122,7 @@ class BitFile(Gtk.Box):
     def __init__(self, file):
         Gtk.Box.__init__(self)
         self.set_orientation(Gtk.Orientation.VERTICAL)
+        self.get_style_context().add_class("background");
 
         logger.debug("Make Tab")
 
