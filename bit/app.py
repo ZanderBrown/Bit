@@ -2,7 +2,8 @@
 
 import sys, gi, logging, os
 gi.require_version('Gtk', '3.0')
-from gi.repository import GLib, Gio, Gtk, GObject
+gi.require_version('GtkSource', '3.0')
+from gi.repository import GLib, Gio, Gtk, GObject, Pango
 from gi.repository import GtkSource
 
 #from mu.logic import Editor, LOG_FILE, LOG_DIR
@@ -17,8 +18,9 @@ def setup_logging():
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
     log_format = '%(name)s(%(funcName)s) %(levelname)s: %(message)s'
-    logging.basicConfig(filename=LOG_FILE, filemode='w', format=log_format,
-                        level=logging.DEBUG)
+    #logging.basicConfig(filename=LOG_FILE, filemode='w', format=log_format,
+    #                    level=logging.DEBUG)
+    logging.basicConfig(format=log_format, level=logging.DEBUG)
     print('Logging to {}'.format(LOG_FILE))
 
 
@@ -28,6 +30,23 @@ MENU_XML="""
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <menu id="app-menu">
+    <section>
+      <item>
+        <attribute name="action">app.zoom-in</attribute>
+        <attribute name="label" translatable="yes">_Increase Text</attribute>
+      </item>
+      <item>
+        <attribute name="action">app.zoom-out</attribute>
+        <attribute name="label" translatable="yes">_Decrease Text</attribute>
+        <attribute name="accel">&lt;Primary&gt;q</attribute>
+    </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="action">app.dark</attribute>
+        <attribute name="label" translatable="yes">_Theme</attribute>
+      </item>
+    </section>
     <section>
       <item>
         <attribute name="action">app.about</attribute>
@@ -99,6 +118,78 @@ class TabLabel(Gtk.Box):
         self.spinner.stop()
         self.spinner.set_visible(False)
 
+class BitFile(Gtk.Box):
+    def __init__(self, file):
+        Gtk.Box.__init__(self)
+        self.set_orientation(Gtk.Orientation.VERTICAL)
+
+        logger.debug("Make Tab")
+
+        self.scroll = Gtk.ScrolledWindow()
+
+        lm = GtkSource.LanguageManager.new()
+        language = lm.guess_language(file, None)
+
+        logger.debug("Make Buffer")
+        buffer = GtkSource.Buffer()
+
+        if language:
+            buffer.set_highlight_syntax(True)
+            buffer.set_language(language)
+        else:
+            logger.warning('No language found for file "%s"' % file)
+            buffer.set_highlight_syntax(False)
+
+        logger.debug("Make File")
+        source_file = GtkSource.File()
+        source_file.set_location(Gio.File.new_for_path(file))
+        source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
+        source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
+
+        logger.debug("Make View")
+        self.sourceview = GtkSource.View.new_with_buffer(buffer)
+        self.sourceview.set_auto_indent(True)
+        self.sourceview.set_indent_on_tab(True)
+        self.sourceview.set_show_line_numbers(True)
+        self.sourceview.set_highlight_current_line(True)
+        self.sourceview.set_smart_home_end(True)
+
+        #self.sourceview.undo()
+        self.scroll.add(self.sourceview)
+        self.pack_start(self.scroll, True, True, 0)
+
+        self.actions = Gtk.ActionBar()
+
+        btn_undo = Gtk.Button('Undo')
+        btn_undo.connect("clicked", self.undo, self)
+
+        btn_redo = Gtk.Button('Redo')
+        btn_redo.connect("clicked", self.redo, self)
+
+        self.actions.pack_start(btn_undo)
+        self.actions.pack_start(btn_redo)
+        self.pack_end(self.actions, False, False, 0)
+
+        self.bit_file = source_file
+        self.bit_buffer = buffer
+        self.show_all()
+        print(self.get_file())
+
+    def get_file(self):
+        return self.bit_file.get_location().get_path()
+
+    def undo(self, widget, data):
+        if self.bit_buffer.can_undo():
+            self.bit_buffer.undo()
+
+    def redo(self, widget, data):
+        if self.bit_buffer.can_redo():
+            self.bit_buffer.redo()
+
+    def zoom(self, level):
+        print("monospace " + str(level))
+        self.sourceview.modify_font(Pango.FontDescription("monospace " + str(level)))
+
 class BitWin(Gtk.ApplicationWindow):
 
     def __init__(self, *args, **kwargs):
@@ -113,6 +204,11 @@ class BitWin(Gtk.ApplicationWindow):
         btn_save  = Gtk.Button('Save')
         btn_new   = Gtk.Button.new_from_icon_name('tab-new-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
         btn_flash = Gtk.Button.new_from_icon_name('media-playback-start-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
+
+        btn_open.set_tooltip_text("Open File")
+        btn_save.set_tooltip_text("Save File")
+        btn_new.set_tooltip_text("New File")
+        btn_flash.set_tooltip_text("Flash Micro:Bit")
 
         self.header.pack_start(btn_open)
         self.header.pack_start(btn_new)
@@ -142,7 +238,8 @@ class BitWin(Gtk.ApplicationWindow):
         Gtk.Notebook.popup_enable (self.notebook)
         self.notebook.connect("switch-page", self.on_page_changed, None)
 
-        self.files = []
+        self.zoom = 12
+
         self.create_sourceview()
         self.box.pack_start(self.notebook, True, True, 0)
         
@@ -152,53 +249,20 @@ class BitWin(Gtk.ApplicationWindow):
         self.set_icon_name("applications-development")
         self.show_all()
 
-        mbtext = find_microbit()
-        print(mbtext)
-
     def on_page_changed(self, happy, page, page_num, data):
         self.header.set_title(self.notebook.get_tab_label(page).get_text())
         logger.debug("Switched to tab with contents: " + page.bit_buffer.get_text(page.bit_buffer.get_start_iter(), page.bit_buffer.get_end_iter(), True))
 
-    def create_sourceview(self, file = "/home/pi/projects/Bit/template.py"):
-        logger.debug("Make Tab")
+    def create_sourceview(self, file = "template.py"):
+        scrolledwindow = BitFile(file)
+        scrolledwindow.zoom(self.zoom)
         filename = file.split('/')
         filename = filename[len(filename)-1]
-
-        lm = GtkSource.LanguageManager.new()
-        language = lm.guess_language(file, None)
-
-        buffer = GtkSource.Buffer()
-
-        if language:
-            buffer.set_highlight_syntax(True)
-            buffer.set_language(language)
-        else:
-            logger.warning('No language found for file "%s"' % file)
-            buffer.set_highlight_syntax(False)
-
-        source_file = GtkSource.File()
-        source_file.set_location(Gio.File.new_for_path(file))
-        source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
-        source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
-
-        sourceview = GtkSource.View.new_with_buffer(buffer)
-        sourceview.set_auto_indent(True)
-        sourceview.set_indent_on_tab(True)
-        sourceview.set_show_line_numbers(True)
-        sourceview.set_highlight_current_line(True)
-        sourceview.set_smart_home_end(True)
-
-        scrolledwindow = Gtk.ScrolledWindow()
-        scrolledwindow.add(sourceview)
-
         tab_label = TabLabel(filename)
-        tab_label.connect("close-clicked", self.on_close_clicked, self.notebook, scrolledwindow)
-        
+        logger.debug("TabLable Made")
         self.notebook.append_page(scrolledwindow, tab_label)
         self.notebook.set_tab_reorderable(scrolledwindow, True)
-        scrolledwindow.bit_file = source_file
-        scrolledwindow.bit_buffer = buffer
-        scrolledwindow.show_all()
+        tab_label.connect("close-clicked", self.on_close_clicked, self.notebook, scrolledwindow)
         self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
 
     def on_close_clicked(self, widget2, sender, widget):
@@ -245,7 +309,8 @@ class BitWin(Gtk.ApplicationWindow):
         
     def on_flash_clicked(self, widget, data):
         logger.debug("Flash Requested")
-
+        logger.debug(flash(self.notebook.get_nth_page(self.notebook.get_current_page()).get_file()))
+        
     def on_close_widow(self):
         logger.debug("Window closing")
         print(self.notebook.get_n_pages())
@@ -260,6 +325,11 @@ class BitWin(Gtk.ApplicationWindow):
                     print("QUESTION dialog closed by clicking NO button")
                 dialog.destroy()
 
+    def zoom_text(self, level):
+        self.zoom = level
+        for x in range(0, self.notebook.get_n_pages()):
+            self.notebook.get_nth_page(x).zoom(level)
+
 class BitApp(Gtk.Application):
 
     def __init__(self, *args, **kwargs):
@@ -273,6 +343,20 @@ class BitApp(Gtk.Application):
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
+        self.zoom = 12
+        self.dark = False
+
+        action = Gio.SimpleAction.new("zoom-in", None)
+        action.connect("activate", self.on_zoom_in)
+        self.add_action(action)
+
+        action = Gio.SimpleAction.new("zoom-out", None)
+        action.connect("activate", self.on_zoom_out)
+        self.add_action(action)
+
+        action = Gio.SimpleAction.new("dark", None)
+        action.connect("activate", self.on_dark)
+        self.add_action(action)
 
         action = Gio.SimpleAction.new("about", None)
         action.connect("activate", self.on_about)
@@ -291,9 +375,11 @@ class BitApp(Gtk.Application):
             # Windows are associated with the application
             # when the last one is closed the application shuts down
             self.window = BitWin(application=self, title="Bit")
+            self.window.zoom_text(self.zoom)
             self.window.connect("delete-event", self.on_quit)
 
         self.window.present()
+        self.window.show()
 
     def do_command_line(self, command_line):
         options = command_line.get_options_dict()
@@ -305,13 +391,33 @@ class BitApp(Gtk.Application):
         self.activate()
         return 0
 
+    def on_zoom_in(self, action, param):
+        self.zoom = self.zoom + 3
+        self.window.zoom_text(self.zoom)
+
+    def on_zoom_out(self, action, param):
+        self.zoom = self.zoom - 3
+        self.window.zoom_text(self.zoom)
+
+    def on_dark(self, action, param):
+        if self.dark:
+            Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", False);
+            self.dark = False
+        else:
+            Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", True);
+            self.dark = True
+
+
     def on_about(self, action, param):
         aboutdialog = Gtk.AboutDialog(transient_for=self.window, modal=True)
+        aboutdialog.set_program_name("Bit")
         aboutdialog.set_name("Bit")
-        aboutdialog.set_version("1.0")
+        aboutdialog.set_version("1.2")
         aboutdialog.set_comments("Python Editor for Micro::Bit")
         aboutdialog.set_authors(["Alexander Brown"])
-        aboutdialog.set_copyright("Copyright © 2016 Alexander Brown")
+        aboutdialog.set_website("https://github.com/zanderbrown/bit")
+        aboutdialog.set_website_label("GitHub Repository")
+        aboutdialog.set_copyright("Copyright © 2016 Alexander Brown Takes inspiration from Mu")
         aboutdialog.set_logo_icon_name("applications-development")
         aboutdialog.run()
         aboutdialog.destroy()
@@ -320,10 +426,45 @@ class BitApp(Gtk.Application):
         self.window.on_close_widow()
         self.quit()
 
+def flash(file, path = None):
+    import os
+    from bit.contrib import uflash
+    logger.debug("Flash" + file)
+    # Make a hex
+    try:
+        # Load File contents
+        f = open(file, "r")
+        script = f.read()
+        # Actually hex it
+        python_hex = uflash.hexlify(script.encode('utf-8'))
+    except:
+        # Opps that didnt work...
+        return 3;
 
+    # Add it to MicroPython
+    micropython_hex = uflash.embed_hex(uflash._RUNTIME, python_hex)
+
+    # Did they manually specify path?
+    if path is None:
+        path = uflash.find_microbit()
+        if path is None:
+            # Cant find it!
+            return 2
+
+    # So does it really ecist?
+    if path and os.path.exists(path):
+        hex_file = os.path.join(path, 'micropython.hex')
+        # Save to microbit
+        uflash.save_hex(micropython_hex, hex_file)
+        # Yay it worked!
+        return 1;
+    else:
+        # Still doesnt exist
+        return 2
 
 def run():
     setup_logging()
+    print("Started")
     app = BitApp()
     app.run(sys.argv)
 
