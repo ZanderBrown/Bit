@@ -26,9 +26,9 @@ import os.path
 import sys
 import json
 import logging
-from PyQt5.QtWidgets import QMessageBox
-from PyQt5.QtSerialPort import QSerialPortInfo
-from mu.contrib import uflash, appdirs
+#from PyQt5.QtWidgets import QMessageBox
+#from PyQt5.QtSerialPort import QSerialPortInfo
+from bit.contrib import uflash, appdirs
 
 
 #: USB product ID.
@@ -52,26 +52,26 @@ LOG_FILE = os.path.join(LOG_DIR, 'Bit.log')
 logger = logging.getLogger(__name__)
 
 
-def find_microbit():
-    """
-    Returns the port for the first microbit it finds connected to the host
-    computer. If no microbit is found, returns None.
-    """
-    available_ports = QSerialPortInfo.availablePorts()
-    for port in available_ports:
-        pid = port.productIdentifier()
-        vid = port.vendorIdentifier()
-        if pid == MICROBIT_PID and vid == MICROBIT_VID:
-            port_name = port.portName()
-            logger.info('Found micro:bit with portName: {}'.format(port_name))
-            return port_name
-    logger.warning('Could not find micro:bit.')
-    logger.debug('Available ports:')
-    logger.debug(['PID:{} VID:{} PORT:{}'.format(p.productIdentifier(),
-                                                 p.vendorIdentifier(),
-                                                 p.portName())
-                 for p in available_ports])
-    return None
+#def find_microbit():
+#    """
+#    Returns the port for the first microbit it finds connected to the host
+#    computer. If no microbit is found, returns None.
+#    """
+#    available_ports = QSerialPortInfo.availablePorts()
+#    for port in available_ports:
+#        pid = port.productIdentifier()
+#        vid = port.vendorIdentifier()
+#        if pid == MICROBIT_PID and vid == MICROBIT_VID:
+#            port_name = port.portName()
+#            logger.info('Found micro:bit with portName: {}'.format(port_name))
+#            return port_name
+#    logger.warning('Could not find micro:bit.')
+#    logger.debug('Available ports:')
+#    logger.debug(['PID:{} VID:{} PORT:{}'.format(p.productIdentifier(),
+#                                                 p.vendorIdentifier(),
+#                                                 p.portName())
+#                 for p in available_ports])
+#    return None
 
 
 class REPL:
