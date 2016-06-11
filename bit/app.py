@@ -101,9 +101,53 @@ class TabLabel(Gtk.Box):
         self.spinner.stop()
         self.spinner.set_visible(False)
 
-class BitFile:
-    def __init__():
-        print("TODO")
+class BitFile(Gtk.ScrolledWindow):
+    def __init__(self, file):
+        Gtk.ScrolledWindow.__init__(self)
+        logger.debug("Make Tab")
+        
+
+        lm = GtkSource.LanguageManager.new()
+        language = lm.guess_language(file, None)
+
+        logger.debug("Make Buffer")
+        buffer = GtkSource.Buffer()
+
+        if language:
+            buffer.set_highlight_syntax(True)
+            buffer.set_language(language)
+        else:
+            logger.warning('No language found for file "%s"' % file)
+            buffer.set_highlight_syntax(False)
+
+        logger.debug("Make File")
+        source_file = GtkSource.File()
+        source_file.set_location(Gio.File.new_for_path(file))
+        source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
+        source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
+
+        logger.debug("Make View")
+        sourceview = GtkSource.View.new_with_buffer(buffer)
+        sourceview.set_auto_indent(True)
+        sourceview.set_indent_on_tab(True)
+        sourceview.set_show_line_numbers(True)
+        sourceview.set_highlight_current_line(True)
+        sourceview.set_smart_home_end(True)
+
+        logger.debug("Make Scrolled")
+        self.add(sourceview)
+
+        #print("File")
+        #print(source_file)
+        #dir(source_file)
+        self.bit_file = source_file
+        self.bit_buffer = buffer
+        self.show_all()
+        logger.debug("Tab Made")
+        print(self.get_file())
+
+    def get_file(self):
+        return self.bit_file.get_location().get_path()
 
 class BitWin(Gtk.ApplicationWindow):
 
@@ -149,7 +193,7 @@ class BitWin(Gtk.ApplicationWindow):
         self.notebook.connect("switch-page", self.on_page_changed, None)
 
         self.files = []
-        self.create_sourceview()
+        #self.create_sourceview()
         self.box.pack_start(self.notebook, True, True, 0)
         
         self.add(self.box)
@@ -166,6 +210,16 @@ class BitWin(Gtk.ApplicationWindow):
         logger.debug("Switched to tab with contents: " + page.bit_buffer.get_text(page.bit_buffer.get_start_iter(), page.bit_buffer.get_end_iter(), True))
 
     def create_sourceview(self, file = "template.py"):
+        scrolledwindow = BitFile(file)
+        filename = file.split('/')
+        filename = filename[len(filename)-1]
+        tab_label = TabLabel(filename)
+        logger.debug("TabLable Made")
+        self.notebook.append_page(scrolledwindow, tab_label)
+        self.notebook.set_tab_reorderable(scrolledwindow, True)
+        tab_label.connect("close-clicked", self.on_close_clicked, self.notebook, scrolledwindow)
+        self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
+        """
         logger.debug("Make Tab")
         filename = file.split('/')
         filename = filename[len(filename)-1]
@@ -215,7 +269,7 @@ class BitWin(Gtk.ApplicationWindow):
         scrolledwindow.show_all()
         self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
         logger.debug("Tab Made")
-
+        """
     def on_close_clicked(self, widget2, sender, widget):
         logger.debug("Close Tab Requested")
         pagenum = self.notebook.page_num(widget)
@@ -260,44 +314,8 @@ class BitWin(Gtk.ApplicationWindow):
         
     def on_flash_clicked(self, widget, data):
         logger.debug("Flash Requested")
-        self.flash(self.notebook.get_nth_page(self.notebook.get_current_page()).filename)
+        logger.debug(flash(self.notebook.get_nth_page(self.notebook.get_current_page()).get_file()))
         
-    def flash(file, path = None):
-        import os
-        from bit.contrib import uflash
-        print("Flash" + file)
-        # Make a hex
-        try:
-            # Load File contents
-            f = open(file, "r")
-            script = f.read()
-            # Actually hex it
-            python_hex = uflash.hexlify(script.encode('utf-8'))
-        except:
-            # Opps that didnt work...
-            return 3;
-
-        # Add it to MicroPython
-        micropython_hex = uflash.embed_hex(uflash._RUNTIME, python_hex)
-
-        # Did they manually specify path?
-        if path is None:
-            path = uflash.find_microbit()
-            if path is None:
-                # Cant find it!
-                return 2
-
-        # So does it really ecist?
-        if path and os.path.exists(path):
-            hex_file = os.path.join(path, 'micropython.hex')
-            # Save to microbit
-            uflash.save_hex(micropython_hex, hex_file)
-            # Yay it worked!
-            return 1;
-        else:
-            # Still doesnt exist
-            return 2
-
     def on_close_widow(self):
         logger.debug("Window closing")
         print(self.notebook.get_n_pages())
@@ -373,7 +391,41 @@ class BitApp(Gtk.Application):
         self.window.on_close_widow()
         self.quit()
 
+def flash(file, path = None):
+    import os
+    from bit.contrib import uflash
+    logger.debug("Flash" + file)
+    # Make a hex
+    try:
+        # Load File contents
+        f = open(file, "r")
+        script = f.read()
+        # Actually hex it
+        python_hex = uflash.hexlify(script.encode('utf-8'))
+    except:
+        # Opps that didnt work...
+        return 3;
 
+    # Add it to MicroPython
+    micropython_hex = uflash.embed_hex(uflash._RUNTIME, python_hex)
+
+    # Did they manually specify path?
+    if path is None:
+        path = uflash.find_microbit()
+        if path is None:
+            # Cant find it!
+            return 2
+
+    # So does it really ecist?
+    if path and os.path.exists(path):
+        hex_file = os.path.join(path, 'micropython.hex')
+        # Save to microbit
+        uflash.save_hex(micropython_hex, hex_file)
+        # Yay it worked!
+        return 1;
+    else:
+        # Still doesnt exist
+        return 2
 
 def run():
     setup_logging()
