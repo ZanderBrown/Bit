@@ -101,11 +101,14 @@ class TabLabel(Gtk.Box):
         self.spinner.stop()
         self.spinner.set_visible(False)
 
-class BitFile(Gtk.ScrolledWindow):
+class BitFile(Gtk.Box):
     def __init__(self, file):
-        Gtk.ScrolledWindow.__init__(self)
+        Gtk.Box.__init__(self)
+        self.set_orientation(Gtk.Orientation.VERTICAL)
+
         logger.debug("Make Tab")
-        
+
+        self.scroll = Gtk.ScrolledWindow()
 
         lm = GtkSource.LanguageManager.new()
         language = lm.guess_language(file, None)
@@ -127,27 +130,44 @@ class BitFile(Gtk.ScrolledWindow):
         source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
 
         logger.debug("Make View")
-        sourceview = GtkSource.View.new_with_buffer(buffer)
-        sourceview.set_auto_indent(True)
-        sourceview.set_indent_on_tab(True)
-        sourceview.set_show_line_numbers(True)
-        sourceview.set_highlight_current_line(True)
-        sourceview.set_smart_home_end(True)
+        self.sourceview = GtkSource.View.new_with_buffer(buffer)
+        self.sourceview.set_auto_indent(True)
+        self.sourceview.set_indent_on_tab(True)
+        self.sourceview.set_show_line_numbers(True)
+        self.sourceview.set_highlight_current_line(True)
+        self.sourceview.set_smart_home_end(True)
 
-        logger.debug("Make Scrolled")
-        self.add(sourceview)
+        #self.sourceview.undo()
+        self.scroll.add(self.sourceview)
+        self.pack_start(self.scroll, True, True, 0)
 
-        #print("File")
-        #print(source_file)
-        #dir(source_file)
+        self.actions = Gtk.ActionBar()
+
+        btn_undo = Gtk.Button('Undo')
+        btn_undo.connect("clicked", self.undo, self)
+
+        btn_redo = Gtk.Button('Redo')
+        btn_redo.connect("clicked", self.redo, self)
+
+        self.actions.pack_start(btn_undo)
+        self.actions.pack_start(btn_redo)
+        self.pack_end(self.actions, False, False, 0)
+
         self.bit_file = source_file
         self.bit_buffer = buffer
         self.show_all()
-        logger.debug("Tab Made")
         print(self.get_file())
 
     def get_file(self):
         return self.bit_file.get_location().get_path()
+
+    def undo(self, widget, data):
+        if self.bit_buffer.can_undo():
+            self.bit_buffer.undo()
+
+    def redo(self, widget, data):
+        if self.bit_buffer.can_redo():
+            self.bit_buffer.redo()
 
 class BitWin(Gtk.ApplicationWindow):
 
@@ -163,6 +183,11 @@ class BitWin(Gtk.ApplicationWindow):
         btn_save  = Gtk.Button('Save')
         btn_new   = Gtk.Button.new_from_icon_name('tab-new-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
         btn_flash = Gtk.Button.new_from_icon_name('media-playback-start-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
+
+        btn_open.set_tooltip_text("Open File")
+        btn_save.set_tooltip_text("Save File")
+        btn_new.set_tooltip_text("New File")
+        btn_flash.set_tooltip_text("Flash Micro:Bit")
 
         self.header.pack_start(btn_open)
         self.header.pack_start(btn_new)
@@ -192,8 +217,7 @@ class BitWin(Gtk.ApplicationWindow):
         Gtk.Notebook.popup_enable (self.notebook)
         self.notebook.connect("switch-page", self.on_page_changed, None)
 
-        self.files = []
-        #self.create_sourceview()
+        self.create_sourceview()
         self.box.pack_start(self.notebook, True, True, 0)
         
         self.add(self.box)
@@ -201,9 +225,6 @@ class BitWin(Gtk.ApplicationWindow):
         self.set_titlebar(self.header)
         self.set_icon_name("applications-development")
         self.show_all()
-
-#        mbtext = find_microbit()
-#        print(mbtext)
 
     def on_page_changed(self, happy, page, page_num, data):
         self.header.set_title(self.notebook.get_tab_label(page).get_text())
@@ -219,57 +240,7 @@ class BitWin(Gtk.ApplicationWindow):
         self.notebook.set_tab_reorderable(scrolledwindow, True)
         tab_label.connect("close-clicked", self.on_close_clicked, self.notebook, scrolledwindow)
         self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
-        """
-        logger.debug("Make Tab")
-        filename = file.split('/')
-        filename = filename[len(filename)-1]
 
-        lm = GtkSource.LanguageManager.new()
-        language = lm.guess_language(file, None)
-
-        logger.debug("Make Buffer")
-        buffer = GtkSource.Buffer()
-
-        if language:
-            buffer.set_highlight_syntax(True)
-            buffer.set_language(language)
-        else:
-            logger.warning('No language found for file "%s"' % file)
-            buffer.set_highlight_syntax(False)
-
-        logger.debug("Make File")
-        source_file = GtkSource.File()
-        source_file.set_location(Gio.File.new_for_path(file))
-        source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
-        source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
-
-        logger.debug("Make View")
-        sourceview = GtkSource.View.new_with_buffer(buffer)
-        sourceview.set_auto_indent(True)
-        sourceview.set_indent_on_tab(True)
-        sourceview.set_show_line_numbers(True)
-        sourceview.set_highlight_current_line(True)
-        sourceview.set_smart_home_end(True)
-
-        logger.debug("Make Scrolled")
-        scrolledwindow = Gtk.ScrolledWindow()
-        scrolledwindow.add(sourceview)
-
-        tab_label = TabLabel(filename)
-        logger.debug("TabLable Made")
-        tab_label.connect("close-clicked", self.on_close_clicked, self.notebook, scrolledwindow)
-        print(source_file.get_location().get_path())
-        #print("File")
-        #print(source_file)
-        #dir(source_file)
-        self.notebook.append_page(scrolledwindow, tab_label)
-        self.notebook.set_tab_reorderable(scrolledwindow, True)
-        scrolledwindow.bit_file = source_file
-        scrolledwindow.bit_buffer = buffer
-        scrolledwindow.show_all()
-        self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
-        logger.debug("Tab Made")
-        """
     def on_close_clicked(self, widget2, sender, widget):
         logger.debug("Close Tab Requested")
         pagenum = self.notebook.page_num(widget)
@@ -378,11 +349,14 @@ class BitApp(Gtk.Application):
 
     def on_about(self, action, param):
         aboutdialog = Gtk.AboutDialog(transient_for=self.window, modal=True)
+        aboutdialog.set_program_name("Bit")
         aboutdialog.set_name("Bit")
-        aboutdialog.set_version("1.0")
+        aboutdialog.set_version("1.2")
         aboutdialog.set_comments("Python Editor for Micro::Bit")
         aboutdialog.set_authors(["Alexander Brown"])
-        aboutdialog.set_copyright("Copyright © 2016 Alexander Brown")
+        aboutdialog.set_website("https://github.com/zanderbrown/bit")
+        aboutdialog.set_website_label("GitHub Repository")
+        aboutdialog.set_copyright("Copyright © 2016 Alexander Brown Takes inspiration from Mu")
         aboutdialog.set_logo_icon_name("applications-development")
         aboutdialog.run()
         aboutdialog.destroy()
