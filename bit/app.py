@@ -43,6 +43,12 @@ MENU_XML="""
     </section>
     <section>
       <item>
+        <attribute name="action">app.dark</attribute>
+        <attribute name="label" translatable="yes">_Theme</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
         <attribute name="action">app.about</attribute>
         <attribute name="label" translatable="yes">_About</attribute>
       </item>
@@ -338,6 +344,7 @@ class BitApp(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
         self.zoom = 12
+        self.dark = False
 
         action = Gio.SimpleAction.new("zoom-in", None)
         action.connect("activate", self.on_zoom_in)
@@ -345,6 +352,10 @@ class BitApp(Gtk.Application):
 
         action = Gio.SimpleAction.new("zoom-out", None)
         action.connect("activate", self.on_zoom_out)
+        self.add_action(action)
+
+        action = Gio.SimpleAction.new("dark", None)
+        action.connect("activate", self.on_dark)
         self.add_action(action)
 
         action = Gio.SimpleAction.new("about", None)
@@ -387,6 +398,15 @@ class BitApp(Gtk.Application):
     def on_zoom_out(self, action, param):
         self.zoom = self.zoom - 3
         self.window.zoom_text(self.zoom)
+
+    def on_dark(self, action, param):
+        if self.dark:
+            Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", False);
+            self.dark = False
+        else:
+            Gtk.Settings.get_default().set_property("gtk-application-prefer-dark-theme", True);
+            self.dark = True
+
 
     def on_about(self, action, param):
         aboutdialog = Gtk.AboutDialog(transient_for=self.window, modal=True)
