@@ -122,7 +122,7 @@ class BitFile(Gtk.Box):
     def __init__(self, file):
         Gtk.Box.__init__(self)
         self.set_orientation(Gtk.Orientation.VERTICAL)
-        self.get_style_context().add_class("background");
+        self.get_style_context().add_class("background")
 
         logger.debug("Make Tab")
 
@@ -131,7 +131,6 @@ class BitFile(Gtk.Box):
         lm = GtkSource.LanguageManager.new()
         language = lm.guess_language(file, None)
 
-        logger.debug("Make Buffer")
         buffer = GtkSource.Buffer()
 
         if language:
@@ -141,13 +140,11 @@ class BitFile(Gtk.Box):
             logger.warning('No language found for file "%s"' % file)
             buffer.set_highlight_syntax(False)
 
-        logger.debug("Make File")
         source_file = GtkSource.File()
         source_file.set_location(Gio.File.new_for_path(file))
         source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
         source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
 
-        logger.debug("Make View")
         self.sourceview = GtkSource.View.new_with_buffer(buffer)
         self.sourceview.set_auto_indent(True)
         self.sourceview.set_indent_on_tab(True)
@@ -155,20 +152,40 @@ class BitFile(Gtk.Box):
         self.sourceview.set_highlight_current_line(True)
         self.sourceview.set_smart_home_end(True)
 
-        #self.sourceview.undo()
         self.scroll.add(self.sourceview)
+        data =  "GtkSourceView {\n" \
+        "   font-family: monospace;\n" \
+        "}"
+        provider = Gtk.CssProvider()
+        provider.load_from_data(bytes(data, "ascii"))
+        # 600 = GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+        self.sourceview.get_style_context().add_provider(provider, 600)
         self.pack_start(self.scroll, True, True, 0)
 
         self.actions = Gtk.ActionBar()
 
-        btn_undo = Gtk.Button('Undo')
-        btn_undo.connect("clicked", self.undo, self)
+        box_unredo = Gtk.Box()
+        box_unredo.get_style_context().add_class('linked')
 
-        btn_redo = Gtk.Button('Redo')
+        btn_undo = Gtk.Button('Undo')
+        btn_undo.set_tooltip_text('Undo the last edit')
+        btn_undo.connect('clicked', self.undo, self)
+
+        btn_redo = Gtk.Button.new_from_icon_name('edit-redo-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
+        btn_redo.set_tooltip_text('Redo the undone edit')
         btn_redo.connect("clicked", self.redo, self)
 
-        self.actions.pack_start(btn_undo)
-        self.actions.pack_start(btn_redo)
+        box_unredo.add(btn_undo)
+        box_unredo.add(btn_redo)
+
+        self.actions.pack_start(box_unredo)
+
+        btn_info = Gtk.Button.new_from_icon_name('document-properties-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
+        btn_info.set_tooltip_text('File Information')
+        btn_info.connect("clicked", self.info, self)
+
+        self.actions.pack_end(btn_info)
+
         self.pack_end(self.actions, False, False, 0)
 
         self.bit_file = source_file
@@ -186,10 +203,20 @@ class BitFile(Gtk.Box):
     def redo(self, widget, data):
         if self.bit_buffer.can_redo():
             self.bit_buffer.redo()
-
+            
+    def info(self, widget, data):
+        print("File Info")
+        win = BitFileInfo(self.bit_file.query_info(None. None, None), parent=self.get_toplevel())
+        win.run()
+        win.destroy()
+        
     def zoom(self, level):
         print("monospace " + str(level))
         self.sourceview.modify_font(Pango.FontDescription("monospace " + str(level)))
+
+class BitFileInfo(Gtk.Dialog):
+    def __init__(self, file, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
 class BitWin(Gtk.ApplicationWindow):
 
