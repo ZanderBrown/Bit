@@ -3,7 +3,7 @@
 import sys, gi, logging, os
 gi.require_version('Gtk', '3.0')
 gi.require_version('GtkSource', '3.0')
-from gi.repository import GLib, Gio, Gtk, GObject
+from gi.repository import GLib, Gio, Gtk, GObject, Pango
 from gi.repository import GtkSource
 
 #from mu.logic import Editor, LOG_FILE, LOG_DIR
@@ -30,6 +30,17 @@ MENU_XML="""
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
   <menu id="app-menu">
+    <section>
+      <item>
+        <attribute name="action">app.zoom-in</attribute>
+        <attribute name="label" translatable="yes">_Increase Text</attribute>
+      </item>
+      <item>
+        <attribute name="action">app.zoom-out</attribute>
+        <attribute name="label" translatable="yes">_Decrease Text</attribute>
+        <attribute name="accel">&lt;Primary&gt;q</attribute>
+    </item>
+    </section>
     <section>
       <item>
         <attribute name="action">app.about</attribute>
@@ -169,6 +180,10 @@ class BitFile(Gtk.Box):
         if self.bit_buffer.can_redo():
             self.bit_buffer.redo()
 
+    def zoom(self, level):
+        print("monospace " + str(level))
+        self.sourceview.modify_font(Pango.FontDescription("monospace " + str(level)))
+
 class BitWin(Gtk.ApplicationWindow):
 
     def __init__(self, *args, **kwargs):
@@ -217,6 +232,8 @@ class BitWin(Gtk.ApplicationWindow):
         Gtk.Notebook.popup_enable (self.notebook)
         self.notebook.connect("switch-page", self.on_page_changed, None)
 
+        self.zoom = 12
+
         self.create_sourceview()
         self.box.pack_start(self.notebook, True, True, 0)
         
@@ -232,6 +249,7 @@ class BitWin(Gtk.ApplicationWindow):
 
     def create_sourceview(self, file = "template.py"):
         scrolledwindow = BitFile(file)
+        scrolledwindow.zoom(self.zoom)
         filename = file.split('/')
         filename = filename[len(filename)-1]
         tab_label = TabLabel(filename)
@@ -301,6 +319,11 @@ class BitWin(Gtk.ApplicationWindow):
                     print("QUESTION dialog closed by clicking NO button")
                 dialog.destroy()
 
+    def zoom_text(self, level):
+        self.zoom = level
+        for x in range(0, self.notebook.get_n_pages()):
+            self.notebook.get_nth_page(x).zoom(level)
+
 class BitApp(Gtk.Application):
 
     def __init__(self, *args, **kwargs):
@@ -314,6 +337,15 @@ class BitApp(Gtk.Application):
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
+        self.zoom = 12
+
+        action = Gio.SimpleAction.new("zoom-in", None)
+        action.connect("activate", self.on_zoom_in)
+        self.add_action(action)
+
+        action = Gio.SimpleAction.new("zoom-out", None)
+        action.connect("activate", self.on_zoom_out)
+        self.add_action(action)
 
         action = Gio.SimpleAction.new("about", None)
         action.connect("activate", self.on_about)
@@ -332,6 +364,7 @@ class BitApp(Gtk.Application):
             # Windows are associated with the application
             # when the last one is closed the application shuts down
             self.window = BitWin(application=self, title="Bit")
+            self.window.zoom_text(self.zoom)
             self.window.connect("delete-event", self.on_quit)
 
         self.window.present()
@@ -346,6 +379,14 @@ class BitApp(Gtk.Application):
 
         self.activate()
         return 0
+
+    def on_zoom_in(self, action, param):
+        self.zoom = self.zoom + 3
+        self.window.zoom_text(self.zoom)
+
+    def on_zoom_out(self, action, param):
+        self.zoom = self.zoom - 3
+        self.window.zoom_text(self.zoom)
 
     def on_about(self, action, param):
         aboutdialog = Gtk.AboutDialog(transient_for=self.window, modal=True)
