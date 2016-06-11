@@ -225,7 +225,7 @@ class BitWin(Gtk.ApplicationWindow):
         
     def on_open_clicked(self, widget, data):
         logger.debug("Open Requested")
-        filechooserdialog = Gtk.FileChooserDialog("Open", self, Gtk.FileChooserAction.OPEN, (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+        filechooserdialog = Gtk.FileChooserDialog("Open", self, Gtk.FileChooserAction.OPEN, (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.APPLY))
 
         filter_py = Gtk.FileFilter()
         filter_py.set_name("Python files")
