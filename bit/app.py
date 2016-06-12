@@ -98,6 +98,7 @@ class BitFile(Gtk.Box):
         if language:
             buffer.set_highlight_syntax(True)
             buffer.set_language(language)
+            buffer.set_style_scheme(GtkSource.StyleSchemeManager.get_default().get_scheme('cobalt'));
         else:
             logger.warning('No language found for file "%s"' % file)
             buffer.set_highlight_syntax(False)
@@ -113,6 +114,8 @@ class BitFile(Gtk.Box):
         self.sourceview.set_show_line_numbers(True)
         self.sourceview.set_highlight_current_line(True)
         self.sourceview.set_smart_home_end(True)
+        self.sourceview.set_auto_indent (True)
+        self.sourceview.set_show_right_margin(True)
 
         self.scroll.add(self.sourceview)
         data =  "GtkSourceView {\n" \
