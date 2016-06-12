@@ -8,8 +8,6 @@ from gi.repository import GtkSource
 from pkg_resources import resource_string
 from bit.logic import *
 
-
-
 logger = logging.getLogger(__name__)
 
 def setup_logging():
@@ -102,11 +100,12 @@ class BitFile(Gtk.Box):
         else:
             logger.warning('No language found for file "%s"' % file)
             buffer.set_highlight_syntax(False)
+        buffer.connect("changed", self.changed, self)
 
         source_file = GtkSource.File()
         source_file.set_location(Gio.File.new_for_path(file))
         source_file_loader = GtkSource.FileLoader.new(buffer, source_file)
-        source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, None, None)
+        source_file_loader.load_async(GLib.PRIORITY_DEFAULT, None, None, None, self.done_load, self)
 
         self.sourceview = GtkSource.View.new_with_buffer(buffer)
         self.sourceview.set_auto_indent(True)
@@ -118,13 +117,6 @@ class BitFile(Gtk.Box):
         self.sourceview.set_show_right_margin(True)
 
         self.scroll.add(self.sourceview)
-        data =  "GtkSourceView {\n" \
-        "   font-family: monospace;\n" \
-        "}"
-        provider = Gtk.CssProvider()
-        provider.load_from_data(bytes(data, "ascii"))
-        # 600 = GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
-        self.sourceview.get_style_context().add_provider(provider, 600)
         self.pack_start(self.scroll, True, True, 0)
 
         self.actions = Gtk.ActionBar()
@@ -173,22 +165,27 @@ class BitFile(Gtk.Box):
         win.run()
         win.destroy()
 
+    def changed(self, widget, data):
+        self.set_status('Unsaved')
+
+    def set_status(self, newtext):
+        text = Gtk.Label(newtext)
+        text.show()
+        self.actions.set_center_widget(text)
+        
+    def done_load(self, task, result, data):
+        data.set_status('Ready')
+
     def start_flashing(self):
         spin = Gtk.Spinner()
         spin.start()
         spin.show()
-        text = Gtk.Label('Flashing')
-        text.show()
-        self.actions.set_center_widget(text)
         self.btn_flash_old_child = self.get_toplevel().btn_flash.get_child()
         self.get_toplevel().btn_flash.remove(self.get_toplevel().btn_flash.get_child())
         self.get_toplevel().btn_flash.add(spin)
         self.get_toplevel().btn_flash.set_sensitive(False)
 
     def done_flashing(self):
-        text = Gtk.Label('Done')
-        text.show()
-        self.actions.set_center_widget(text)
         self.get_toplevel().btn_flash.remove(self.get_toplevel().btn_flash.get_child())
         self.get_toplevel().btn_flash.add(self.btn_flash_old_child)
         self.get_toplevel().btn_flash.set_sensitive(True)
@@ -231,6 +228,14 @@ class BitWin(Gtk.ApplicationWindow):
         self.header.set_show_close_button(True)
         self.header.set_title("Untitled")
         self.header.set_subtitle("Bit")
+
+        data =  "GtkSourceView {\n" \
+        "   font-family: monospace;\n" \
+        "}"
+        provider = Gtk.CssProvider()
+        provider.load_from_data(bytes(data, "ascii"))
+        # 600 = GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+        self.get_style_context().add_provider(provider, 600)
 
         self.btn_open  = Gtk.Button('Open')
         self.btn_save  = Gtk.Button('Save')
@@ -294,30 +299,26 @@ class BitWin(Gtk.ApplicationWindow):
         self.notebook.set_current_page(self.notebook.page_num(scrolledwindow))
 
     def on_close_clicked(self, widget2, sender, widget):
-        logger.debug("Close Tab Requested")
         pagenum = self.notebook.page_num(widget)
         # Should check if saved
         self.notebook.remove_page(pagenum)
 
     def on_new_clicked(self, widget, data):
-        logger.debug("New Tab Requested")
         self.create_sourceview()
         self.show_all()
 
     def on_save_clicked(self, widget, data):
-        logger.debug("Save Requested")
         source_file_saver = GtkSource.FileSaver.new(self.notebook.get_nth_page(self.notebook.get_current_page()).bit_buffer, self.notebook.get_nth_page(self.notebook.get_current_page()).bit_file)
         self.notebook.get_tab_label(self.notebook.get_nth_page(self.notebook.get_current_page())).start_working()
         self.notebook.get_nth_page(self.notebook.get_current_page()).bit_buffer.set_modified(False)
-        source_file_saver.save_async(GLib.PRIORITY_DEFAULT, None, None, None, self.done_io, self.notebook.get_nth_page(self.notebook.get_current_page()))
+        source_file_saver.save_async(GLib.PRIORITY_DEFAULT, None, None, None, self.done_save, self.notebook.get_nth_page(self.notebook.get_current_page()))
         
-    def done_io(self, task, result, data):
-        logger.debug("File IO Complete")
+    def done_save(self, task, result, data):
         self.notebook.get_tab_label(data).stop_working()
-        
+        data.set_status('Saved')
+                
     def on_open_clicked(self, widget, data):
-        logger.debug("Open Requested")
-        filechooserdialog = Gtk.FileChooserDialog("Open", self, Gtk.FileChooserAction.OPEN, (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL, Gtk.STOCK_OPEN, Gtk.ResponseType.APPLY))
+        filechooserdialog = Gtk.FileChooserDialog("Open", self, Gtk.FileChooserAction.OPEN, ("_Cancel", Gtk.ResponseType.CANCEL, "_Open", Gtk.ResponseType.ACCEPT))
 
         filter_py = Gtk.FileFilter()
         filter_py.set_name("Python files")
@@ -331,7 +332,7 @@ class BitWin(Gtk.ApplicationWindow):
         filechooserdialog.add_filter(filter_any)
         
         response = filechooserdialog.run()
-        if response == Gtk.ResponseType.APPLY:
+        if response == Gtk.ResponseType.ACCEPT:
             file = filechooserdialog.get_filename()
             self.create_sourceview(file)
         filechooserdialog.destroy()
@@ -342,14 +343,26 @@ class BitWin(Gtk.ApplicationWindow):
         t = threading.Thread(target=self.do_flash)        
         t.start()
         
-    def do_flash(self):
-        self.notebook.get_nth_page(self.notebook.get_current_page()).start_flashing()
-        logger.debug(flash(self.notebook.get_nth_page(self.notebook.get_current_page()).get_file()))
-        self.notebook.get_nth_page(self.notebook.get_current_page()).done_flashing()
-        #messagedialog = Gtk.MessageDialog(message_format="MessageDialog", parent=self)
-        #messagedialog.set_property("message-type", Gtk.MessageType.INFO)
-        #messagedialog.run()
-        #messagedialog.destroy()
+    def do_flash(self, path = None):
+        file = self.notebook.get_nth_page(self.notebook.get_current_page())
+        file.set_status('Flashing')
+        file.start_flashing()
+        result = flash(file.get_file())
+        logger.debug(result)
+        file.done_flashing()
+        if result == 1:
+            file.set_status('Done')
+        elif result == 2:
+            file.set_status('Micro:Bit Not Found')
+            ilechooserdialog = Gtk.FileChooserDialog("Find Micro:Bit", self, Gtk.FileChooserAction.SELECT_FOLDER, ("_Cancel", Gtk.ResponseType.CANCEL, "_Found", Gtk.ResponseType.ACCEPT))
+            response = filechooserdialog.run()
+            if response == Gtk.ResponseType.ACCEPT:
+                print(filechooserdialog.get_filename())
+                self.do_flash(filechooserdialog.get_filename())
+        elif result == 3:
+            file.set_status('Hexify Failed')
+        else:
+            file.set_status('How did you do that?')
 
     def on_close_widow(self):
         logger.debug("Window closing")
