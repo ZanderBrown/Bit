@@ -171,20 +171,23 @@ class BitFile(Gtk.Box):
         win.destroy()
 
     def start_flashing(self):
-        info = Gtk.Box()
         spin = Gtk.Spinner()
         spin.start()
-        info.pack_start(spin, False, False, 0)
-        info.pack_end(Gtk.Label('Flashing'), False, False, 0)
-        info.show_all()
-        self.actions.set_center_widget(info)
+        spin.show()
+        text = Gtk.Label('Flashing')
+        text.show()
+        self.actions.set_center_widget(text)
+        self.btn_flash_old_child = self.get_toplevel().btn_flash.get_child()
+        self.get_toplevel().btn_flash.remove(self.get_toplevel().btn_flash.get_child())
+        self.get_toplevel().btn_flash.add(spin)
         self.get_toplevel().btn_flash.set_sensitive(False)
 
     def done_flashing(self):
-        info = Gtk.Box()
-        info.add(Gtk.Label('Done'))
-        info.show_all()
-        self.actions.set_center_widget(info)
+        text = Gtk.Label('Done')
+        text.show()
+        self.actions.set_center_widget(text)
+        self.get_toplevel().btn_flash.remove(self.get_toplevel().btn_flash.get_child())
+        self.get_toplevel().btn_flash.add(self.btn_flash_old_child)
         self.get_toplevel().btn_flash.set_sensitive(True)
 
     def zoom(self, level):
