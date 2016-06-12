@@ -5,9 +5,10 @@ gi.require_version('Gtk', '3.0')
 gi.require_version('GtkSource', '3.0')
 from gi.repository import GLib, Gio, Gtk, GObject, Pango
 from gi.repository import GtkSource
-
-#from mu.logic import Editor, LOG_FILE, LOG_DIR
+from pkg_resources import resource_string
 from bit.logic import *
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,46 +22,7 @@ def setup_logging():
     #logging.basicConfig(filename=LOG_FILE, filemode='w', format=log_format,
     #                    level=logging.DEBUG)
     logging.basicConfig(format=log_format, level=logging.DEBUG)
-    print('Logging to {}'.format(LOG_FILE))
-
-
-
-# App Menu
-MENU_XML="""
-<?xml version="1.0" encoding="UTF-8"?>
-<interface>
-  <menu id="app-menu">
-    <section>
-      <item>
-        <attribute name="action">app.zoom-in</attribute>
-        <attribute name="label" translatable="yes">_Increase Text</attribute>
-      </item>
-      <item>
-        <attribute name="action">app.zoom-out</attribute>
-        <attribute name="label" translatable="yes">_Decrease Text</attribute>
-        <attribute name="accel">&lt;Primary&gt;q</attribute>
-    </item>
-    </section>
-    <section>
-      <item>
-        <attribute name="action">app.dark</attribute>
-        <attribute name="label" translatable="yes">_Theme</attribute>
-      </item>
-    </section>
-    <section>
-      <item>
-        <attribute name="action">app.about</attribute>
-        <attribute name="label" translatable="yes">_About</attribute>
-      </item>
-      <item>
-        <attribute name="action">app.quit</attribute>
-        <attribute name="label" translatable="yes">_Quit</attribute>
-        <attribute name="accel">&lt;Primary&gt;q</attribute>
-    </item>
-    </section>
-  </menu>
-</interface>
-"""
+    #print('Logging to {}'.format(LOG_FILE))
 
 class TabLabel(Gtk.Box):
     __gsignals__ = {
@@ -70,7 +32,7 @@ class TabLabel(Gtk.Box):
         logger.info("Make TabLabel")
         Gtk.Box.__init__(self)
         self.set_orientation(Gtk.Orientation.HORIZONTAL)
-        self.set_spacing(5) # spacing: [icon|5px|label|5px|close]  
+        self.set_spacing(5)
 
         # icon
         self.spinner = Gtk.Spinner()
@@ -191,7 +153,6 @@ class BitFile(Gtk.Box):
         self.bit_file = source_file
         self.bit_buffer = buffer
         self.show_all()
-        print(self.get_file())
 
     def get_file(self):
         return self.bit_file.get_location().get_path()
@@ -205,18 +166,55 @@ class BitFile(Gtk.Box):
             self.bit_buffer.redo()
             
     def info(self, widget, data):
-        print("File Info")
-        win = BitFileInfo(self.bit_file.query_info(None. None, None), parent=self.get_toplevel())
+        win = BitFileInfo(self.bit_file.get_location().query_info("*",0,None), parent=self.get_toplevel())
         win.run()
         win.destroy()
-        
+
+    def start_flashing(self):
+        info = Gtk.Box()
+        spin = Gtk.Spinner()
+        spin.start()
+        info.pack_start(spin, False, False, 0)
+        info.pack_end(Gtk.Label('Flashing'), False, False, 0)
+        info.show_all()
+        self.actions.set_center_widget(info)
+        self.get_toplevel().btn_flash.set_sensitive(False)
+
+    def done_flashing(self):
+        info = Gtk.Box()
+        info.add(Gtk.Label('Done'))
+        info.show_all()
+        self.actions.set_center_widget(info)
+        self.get_toplevel().btn_flash.set_sensitive(True)
+
     def zoom(self, level):
-        print("monospace " + str(level))
         self.sourceview.modify_font(Pango.FontDescription("monospace " + str(level)))
 
 class BitFileInfo(Gtk.Dialog):
     def __init__(self, file, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.set_title("File Info")
+        header = Gtk.HeaderBar()
+        header.show()
+        self.set_titlebar(header)
+        header.set_title(file.get_name())
+        header.set_subtitle('File Info')
+        header.set_show_close_button(True)
+        builder = Gtk.Builder.new_from_string(resource_string('bit.resources', 'fileinfo.glade').decode('UTF-8', 'replace'), -1)
+        self.get_content_area().add(builder.get_object('info'))
+        suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+        def humansize(nbytes):
+            if nbytes == 0: return '0 B'
+            i = 0
+            while nbytes >= 1024 and i < len(suffixes)-1:
+                nbytes /= 1024.
+                i += 1
+            f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+            return '%s %s' % (f, suffixes[i])
+        
+        builder.get_object('size').set_label(str(humansize(file.get_size())))
+        builder.get_object('file').set_label(str(file.get_name()))
+        builder.get_object('icon').set_from_gicon(file.get_icon(), Gtk.IconSize.DIALOG)
 
 class BitWin(Gtk.ApplicationWindow):
 
@@ -228,25 +226,25 @@ class BitWin(Gtk.ApplicationWindow):
         self.header.set_title("Untitled")
         self.header.set_subtitle("Bit")
 
-        btn_open  = Gtk.Button('Open')
-        btn_save  = Gtk.Button('Save')
-        btn_new   = Gtk.Button.new_from_icon_name('tab-new-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
-        btn_flash = Gtk.Button.new_from_icon_name('media-playback-start-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
+        self.btn_open  = Gtk.Button('Open')
+        self.btn_save  = Gtk.Button('Save')
+        self.btn_new   = Gtk.Button.new_from_icon_name('tab-new-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
+        self.btn_flash = Gtk.Button.new_from_icon_name('media-playback-start-symbolic', Gtk.IconSize.SMALL_TOOLBAR)
 
-        btn_open.set_tooltip_text("Open File")
-        btn_save.set_tooltip_text("Save File")
-        btn_new.set_tooltip_text("New File")
-        btn_flash.set_tooltip_text("Flash Micro:Bit")
+        self.btn_open.set_tooltip_text("Open File")
+        self.btn_save.set_tooltip_text("Save File")
+        self.btn_new.set_tooltip_text("New File")
+        self.btn_flash.set_tooltip_text("Flash Micro:Bit")
 
-        self.header.pack_start(btn_open)
-        self.header.pack_start(btn_new)
-        self.header.pack_end(btn_save)
-        self.header.pack_end(btn_flash)
+        self.header.pack_start(self.btn_open)
+        self.header.pack_start(self.btn_new)
+        self.header.pack_end(self.btn_save)
+        self.header.pack_end(self.btn_flash)
         
-        btn_new.connect("clicked", self.on_new_clicked, self)
-        btn_open.connect("clicked", self.on_open_clicked, self)
-        btn_save.connect("clicked", self.on_save_clicked, self)
-        btn_flash.connect("clicked", self.on_flash_clicked, self)
+        self.btn_new.connect("clicked", self.on_new_clicked, self)
+        self.btn_open.connect("clicked", self.on_open_clicked, self)
+        self.btn_save.connect("clicked", self.on_save_clicked, self)
+        self.btn_flash.connect("clicked", self.on_flash_clicked, self)
 
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
@@ -279,15 +277,11 @@ class BitWin(Gtk.ApplicationWindow):
 
     def on_page_changed(self, happy, page, page_num, data):
         self.header.set_title(self.notebook.get_tab_label(page).get_text())
-        logger.debug("Switched to tab with contents: " + page.bit_buffer.get_text(page.bit_buffer.get_start_iter(), page.bit_buffer.get_end_iter(), True))
 
     def create_sourceview(self, file = "template.py"):
         scrolledwindow = BitFile(file)
         scrolledwindow.zoom(self.zoom)
-        filename = file.split('/')
-        filename = filename[len(filename)-1]
-        tab_label = TabLabel(filename)
-        logger.debug("TabLable Made")
+        tab_label = TabLabel(scrolledwindow.bit_file.get_location().query_info("*",0,None).get_name())
         self.notebook.append_page(scrolledwindow, tab_label)
         self.notebook.set_tab_reorderable(scrolledwindow, True)
         tab_label.connect("close-clicked", self.on_close_clicked, self.notebook, scrolledwindow)
@@ -322,6 +316,7 @@ class BitWin(Gtk.ApplicationWindow):
         filter_py = Gtk.FileFilter()
         filter_py.set_name("Python files")
         filter_py.add_mime_type("text/x-python")
+        filter_py.add_pattern("*.py")
         filechooserdialog.add_filter(filter_py)
 
         filter_any = Gtk.FileFilter()
@@ -330,18 +325,28 @@ class BitWin(Gtk.ApplicationWindow):
         filechooserdialog.add_filter(filter_any)
         
         response = filechooserdialog.run()
-        if response == Gtk.ResponseType.OK:
+        if response == Gtk.ResponseType.APPLY:
             file = filechooserdialog.get_filename()
             self.create_sourceview(file)
         filechooserdialog.destroy()
         
     def on_flash_clicked(self, widget, data):
         logger.debug("Flash Requested")
-        logger.debug(flash(self.notebook.get_nth_page(self.notebook.get_current_page()).get_file()))
+        import threading
+        t = threading.Thread(target=self.do_flash)        
+        t.start()
         
+    def do_flash(self):
+        self.notebook.get_nth_page(self.notebook.get_current_page()).start_flashing()
+        logger.debug(flash(self.notebook.get_nth_page(self.notebook.get_current_page()).get_file()))
+        self.notebook.get_nth_page(self.notebook.get_current_page()).done_flashing()
+        #messagedialog = Gtk.MessageDialog(message_format="MessageDialog", parent=self)
+        #messagedialog.set_property("message-type", Gtk.MessageType.INFO)
+        #messagedialog.run()
+        #messagedialog.destroy()
+
     def on_close_widow(self):
         logger.debug("Window closing")
-        print(self.notebook.get_n_pages())
         for x in range(0, self.notebook.get_n_pages()):
             if (self.notebook.get_nth_page(x).bit_buffer.get_modified()):
                 dialog = Gtk.MessageDialog(self, 0, Gtk.MessageType.QUESTION, Gtk.ButtonsType.YES_NO, "Unsaved Changes")
@@ -394,7 +399,7 @@ class BitApp(Gtk.Application):
         action.connect("activate", self.on_quit)
         self.add_action(action)
 
-        builder = Gtk.Builder.new_from_string(MENU_XML, -1)
+        builder = Gtk.Builder.new_from_string(resource_string('bit.resources', 'appmenu.glade').decode('UTF-8', 'replace'), -1)
         self.set_app_menu(builder.get_object("app-menu"))
 
     def do_activate(self):
@@ -441,7 +446,7 @@ class BitApp(Gtk.Application):
         aboutdialog.set_program_name("Bit")
         aboutdialog.set_name("Bit")
         aboutdialog.set_version("1.2")
-        aboutdialog.set_comments("Python Editor for Micro::Bit")
+        aboutdialog.set_comments("Python Editor for Micro:Bit")
         aboutdialog.set_authors(["Alexander Brown"])
         aboutdialog.set_website("https://github.com/zanderbrown/bit")
         aboutdialog.set_website_label("GitHub Repository")
@@ -492,7 +497,6 @@ def flash(file, path = None):
 
 def run():
     setup_logging()
-    print("Started")
     app = BitApp()
     app.run(sys.argv)
 

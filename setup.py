@@ -10,6 +10,7 @@ setup(
     url='https://github.com/ZanderBrown/Bit',
     packages=['bit'],
     include_package_data=True,
+    package_data={'': ['*.glade']},
     zip_safe=False,
     classifiers=[
         'Environment :: X11 Applications :: Gtk',
